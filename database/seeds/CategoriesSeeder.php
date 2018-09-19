@@ -1,15 +1,10 @@
 <?php
 
-use Illuminate\Database\Seeder;
 use App\Models\Category;
+use Illuminate\Database\Seeder;
 
 class CategoriesSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     *
-     * @return void
-     */
     public function run()
     {
         $categories = [
@@ -69,21 +64,23 @@ class CategoriesSeeder extends Seeder
 
     protected function createCategory($data, $parent = null)
     {
-    	$category = new Category(['name'=> $data['name']]);
-
-    	$category->is_directory = isset($data['children']);
-
-    	if(!is_null($parent)){
-    		$category->parent()->associate($parent);
-    	}
-
-    	$category->save();
-
-    	if (isset($data['children']) && is_array($data['children'])) {
-    		foreach ($data['children'] as $child) {
-    			$this->createCategory($child,$category);
-    		}
-    	}
-
+        
+        $category = new Category(['name' => $data['name']]);
+        
+        $category->is_directory = isset($data['children']);
+        
+        if (!is_null($parent)) {
+            $category->parent()->associate($parent);
+        }
+        
+        $category->save();
+        
+        if (isset($data['children']) && is_array($data['children'])) {
+            
+            foreach ($data['children'] as $child) {
+                
+                $this->createCategory($child, $category);
+            }
+        }
     }
 }
