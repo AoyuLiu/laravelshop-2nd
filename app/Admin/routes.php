@@ -33,4 +33,9 @@ Route::group([
     $router->get('coupon_codes/{id}/edit', 'CouponCodesController@edit');
     $router->put('coupon_codes/{id}', 'CouponCodesController@update');
     $router->delete('coupon_codes/{id}', 'CouponCodesController@destroy');
+    $router->get('crowdfunding_products', 'CrowdfundingProductsController@index');
+    $router->get('crowdfunding_products/create', 'CrowdfundingProductsController@create');
+    $router->post('crowdfunding_products', 'CrowdfundingProductsController@store');
+    $router->get('crowdfunding_products/{id}/edit', 'CrowdfundingProductsController@edit');
+    $router->put('crowdfunding_products/{id}', 'CrowdfundingProductsController@update');
 });
