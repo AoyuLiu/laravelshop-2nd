@@ -258,7 +258,7 @@
             // 订单创建成功，跳转到订单详情页
             swal('订单提交成功', '', 'success')
               .then(() => {
-                console.log(response.data.id);
+                 location.href = '/orders/' + response.data.id;
               });
           }, function (error) {
             // 输入参数校验失败，展示失败原因
