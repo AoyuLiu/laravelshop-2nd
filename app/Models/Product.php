@@ -15,7 +15,8 @@ class Product extends Model
         self::TYPE_CROWDFUNDING => '众筹商品',
     ];
     protected $fillable = [ 
-        'title', 
+        'title',
+        'long_title',  
         'description', 
         'image', 
         'on_sale', 
