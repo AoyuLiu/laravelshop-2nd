@@ -58,6 +58,31 @@ class ProductsController extends Controller
             }
         }
 
+        if ($search || isset($category)) {
+            $params['body']['aggs'] = [
+                'properties' => [
+                    'nested' => [
+                        'path' => 'properties',
+                    ],
+                    'aggs'  => [
+                        'properties' => [
+                            'terms' => [
+                                'field' => 'properties.name',
+                            ],
+                            'aggs' => [
+                                'value' => [
+                                    'terms' => [
+                                        'field' => 'properties.value',
+                                    ],
+                                ],
+                            ],
+                        ],
+
+                    ],
+                ],
+            ];
+        }
+
         if ($order = $request->input('order','')) {
             if (preg_match('/^(.+)_(asc|desc)$/', $order, $m)) {
                 if (in_array($m[1], ['price','sold_count','rating'])) {
@@ -77,7 +102,23 @@ class ProductsController extends Controller
             }
         }
 
-
+        $propertyFilters = [];
+        if ($filterString = $request->input('filters')) {
+            $filterArray = explode('|', $filterString);
+            foreach ($filterArray as $filter) {
+                list($name,$value) = explode(':', $filter);
+                $propertyFilters[$name] = $value;
+                $params['body']['query']['bool']['filter'][] = [
+                    'nested' => [
+                        'path' => 'properties',
+                        'query' => [
+                            ['term' => ['properties.name' => $name]],
+                            ['term' => ['properties.value' => $value]],
+                        ],
+                    ],
+                ];
+            }
+        }
         $result = app('es')->search($params);
 
         $productIds = collect($result['hits']['hits'])->pluck('_id')->all();
@@ -90,7 +131,21 @@ class ProductsController extends Controller
             'path' => route('products.index',false),
         ]);
 
+        $properties = [];
 
+        if (isset($result['aggregations'])) {
+            
+            $properties = collect($result['aggregations']['properties']['properties']['buckets'])
+                    ->map(function($bucket) {
+                        return [
+                            'key' => $bucket['key'],
+                            'values' => collect($bucket['value']['buckets'])->pluck('key')->all(),
+                        ];
+                    })
+                    ->filter(function($property) use ($propertyFilters){
+                         return count($property['values']) > 1 && !isset($propertyFilters[$property['key']]);
+                    });
+        }
 
         return view('products.index',[
             'products' => $pager,
@@ -99,7 +154,8 @@ class ProductsController extends Controller
                 'order'  => $order,
             ],
             'category' => $category ?? null,
-
+            'properties' => $properties,
+            'propertyFilters' => $propertyFilters,
         ]);
     }
 

@@ -8,9 +8,9 @@
   <div class="panel-body">
     <div class="row">
       <form action="{{ route('products.index') }}" class="form-inline search-form">
+          <input type="hidden" name="filters">
         <a class="all-products" href="{{ route('products.index') }}">全部</a> &gt;
         @if ($category)
-          <!-- 遍历这个类目的所有祖先类目，我们在模型的访问器中已经排好序，因此可以直接使用 -->
           @foreach($category->ancestors as $ancestor)
             <!-- 添加一个名为该祖先类目名的链接 -->
             <span class="category">
@@ -23,6 +23,14 @@
           <!-- 当前类目的 ID，当用户调整排序方式时，可以保证 category_id 参数不丢失 -->
           <input type="hidden" name="category_id" value="{{ $category->id }}">
         @endif
+
+        @foreach($propertyFilters as $name => $value)
+          <span class="filter">{{ $name }}:
+            <span class="filter-value">{{ $value }}</span>
+            <a class="remove-filter" href="javascript: removeFilterFromQuery('{{ $name }}')">×</a>
+          </span>
+        @endforeach
+
         <input type="text" class="form-control input-sm" name="search" placeholder="搜索">
         <button class="btn btn-primary btn-sm">搜索</button>
         <select name="order" class="form-control input-sm pull-right">
@@ -37,18 +45,29 @@
       </form>
     </div>
      <div class="filters">
-      <!-- 如果当前是通过类目筛选，并且此类目是一个父类目 -->
+      
       @if ($category && $category->is_directory)
         <div class="row">
           <div class="col-xs-3 filter-key">子类目：</div>
           <div class="col-xs-9 filter-values">
-          <!-- 遍历直接子类目 -->
+         
           @foreach($category->children as $child)
             <a href="{{ route('products.index', ['category_id' => $child->id]) }}">{{ $child->name }}</a>
           @endforeach
           </div>
         </div>
       @endif
+
+      @foreach($properties as $property)
+        <div class="row">
+          <div class="col-xs-3 filter-key">{{ $property['key'] }}：</div>
+          <div class="col-xs-9 filter-values">
+            @foreach($property['values'] as $value)
+              <a href="javascript: appendFilterToQuery('{{ $property['key'] }}', '{{ $value }}')">{{ $value }}</a>
+            @endforeach
+          </div>
+        </div>
+      @endforeach
     </div>
     <div class="row products-list">
       @foreach($products as $product)
@@ -88,8 +107,80 @@
       $('.search-form select[name=order]').val(filters.order);
 
       $('.search-form select[name=order]').on('change', function() {
+        
+        var searches = parseSearch();
+        if (searches['filters']) {
+          $('.search-form input[name=filters]').val(searches['filters']);
+        }
         $('.search-form').submit();
       });
     })
+
+    function parseSearch() {
+      // 初始化一个空对象
+      var searches = {};
+      // location.search 会返回 Url 中 ? 以及后面的查询参数
+      // substr(1) 将 ? 去除，然后以符号 & 分割成数组，然后遍历这个数组
+      location.search.substr(1).split('&').forEach(function (str) {
+        // 将字符串以符号 = 分割成数组
+        var result = str.split('=');
+        // 将数组的第一个值解码之后作为 Key，第二个值解码后作为 Value 放到之前初始化的对象中
+        searches[decodeURIComponent(result[0])] = decodeURIComponent(result[1]);
+      });
+
+      return searches;
+    }
+
+    // 根据 Key-Value 对象构建查询参数
+    function buildSearch(searches) {
+      // 初始化字符串
+      var query = '?';
+      // 遍历 searches 对象
+      _.forEach(searches, function (value, key) {
+        query += encodeURIComponent(key) + '=' + encodeURIComponent(value) + '&';
+      });
+      // 去除最末尾的 & 符号
+      return query.substr(0, query.length - 1);
+    }
+
+    // 将新的 filter 追加到当前的 Url 中
+    function appendFilterToQuery(name, value) {
+      // 解析当前 Url 的查询参数
+      var searches = parseSearch();
+      // 如果已经有了 filters 查询
+      if (searches['filters']) {
+        // 则在已有的 filters 后追加
+        searches['filters'] += '|' + name + ':' + value;
+      } else {
+        // 否则初始化 filters
+        searches['filters'] = name + ':' + value;
+      }
+      // 重新构建查询参数，并触发浏览器跳转
+      location.search = buildSearch(searches);
+    }
+
+    function removeFilterFromQuery(name) {
+      // 解析当前 Url 的查询参数
+      var searches = parseSearch();
+      if(!searches['filters']) {
+        return;
+      }
+
+      var filters = [];
+      searches['filters'].split('|').forEach(function (filter) {
+        // 解析出属性名和属性值
+        var result = filter.split(':');
+        // 如果当前属性名与要移除的属性名一致，则退出
+        if (result[0] === name) {
+          return;
+        }
+        // 否则将这个 filter 放入之前初始化的数组中
+        filters.push(filter);
+      });
+      // 重建 filters 查询
+      searches['filters'] = filters.join('|');
+      // 重新构建查询参数，并触发浏览器跳转
+      location.search = buildSearch(searches);
+    }
   </script>
 @endsection
