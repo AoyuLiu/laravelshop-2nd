@@ -36,12 +36,12 @@ class ProductSearchBuilder
 	public function category(Category $category)
 	{
 		if ($category->is_directory) {
-			$this->params['body']['query']['bool']['filter'][] = [
-				'prefix' = ['category_path'=> $category->path.$category->id.'-'],
-			];
-		} else {
-			$this->params['body']['query']['bool']['filter'][]= ['term' => ['category_id' => $category->id]];
-		}
+            $this->params['body']['query']['bool']['filter'][] = [
+                'prefix' => ['category_path' => $category->path.$category->id.'-'],
+            ];
+        } else {
+            $this->params['body']['query']['bool']['filter'][] = ['term' => ['category_id' => $category->id]];
+        }
 	}
 
 	public function keywords($keywords)
@@ -95,9 +95,9 @@ class ProductSearchBuilder
         return $this;
 	}
 
-	public function propertyFilter($name, $value)
+	public function propertyFilter($name, $value, $type = 'filter')
 	{
-		$this->params['body']['query']['bool']['filter'][] = [
+		$this->params['body']['query']['bool'][$type][] = [
             'nested' => [
                 'path'  => 'properties',
                 'query' => [
@@ -108,6 +108,14 @@ class ProductSearchBuilder
 
         return $this;
 	}
+
+    public function minShouldMatch($count)
+    {
+        $this->params['body']['query']['bool']['minimum_should_match'] = (int)$count;
+
+        return $this;
+    }
+
 
 	 public function orderBy($field, $direction)
     {

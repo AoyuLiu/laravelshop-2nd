@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Http\Controllers;
+use App\Services\ProductService;
 use App\SearchBuilders\ProductSearchBuilder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use App\Models\Category;
@@ -57,10 +58,7 @@ class ProductsController extends Controller
         $result = app('es')->search($builder->getParams());
 
         $productIds = collect($result['hits']['hits'])->pluck('_id')->all();
-        $products = Product::query()
-                ->whereIn('id', $productIds)
-                ->orderByRaw(sprintf("FIND_IN_SET(id, '%s')", join(',', $productIds)))
-                ->get();
+        $products = Product::query()->byIds($productIds)->get();
 
         $pager = new LengthAwarePaginator($products, $result['hits']['total'],$perPage, $page,[
             'path' => route('products.index',false),
@@ -94,7 +92,7 @@ class ProductsController extends Controller
         ]);
     }
 
-    public function show(Product $product, Request $request)
+    public function show(Product $product, Request $request, ProductService $service)
     {
         if (!$product->on_sale) {
             throw new InvalidRequestException('商品未上架');
@@ -115,11 +113,15 @@ class ProductsController extends Controller
             ->limit(10) 
             ->get();
         
-        
+         $similarProductIds = $service->getSimilarProductIds($product, 4);
+
+       $similarProductIds = Product::query()->byIds($similarProductIds)->get();
+
         return view('products.show', [
             'product' => $product,
             'favored' => $favored,
-            'reviews' => $reviews
+            'reviews' => $reviews,
+            'similar' => $similarProductIds,
         ]);
     }
 
