@@ -1,7 +1,7 @@
 <?php
 
 namespace App\Http\Controllers;
-
+use App\SearchBuilders\ProductSearchBuilder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use App\Models\Category;
 use App\Exceptions\InvalidRequestException;
@@ -18,107 +18,43 @@ class ProductsController extends Controller
 
         $perPage = 16;
 
-        $params = [
-            'index' => 'products',
-            'type' => '_doc',
-            'body' => [
-                'from' => ($page -1)*$perPage,
-                'size' => $perPage,
-                'query' => [
-                    'bool' => [
-                        'filter' => [
-                            ['term' => ['on_sale' => true]],
-                        ],
-                    ],
-                ],
-            ],
-        ];
+        $builder = (new ProductSearchBuilder())->onSale()->paginate($perPage,$page);
 
-         if ($search = $request->input('search', '')) {
-            // 将搜索词根据空格拆分成数组，并过滤掉空项
+        if ($request->input('category_id') && $category = Category::find($request->input('category_id'))) {
+            $builder->category($category);
+        }
+
+        if ($search = $request->input('search', '')) {
             $keywords = array_filter(explode(' ', $search));
-
-            $params['body']['query']['bool']['must'] = [];
-            // 遍历搜索词数组，分别添加到 must 查询中
-            foreach ($keywords as $keyword) {
-                $params['body']['query']['bool']['must'][] = [
-                    'multi_match' => [
-                        'query'  => $keyword,
-                        'fields' => [
-                            'title^2',
-                            'long_title^2',
-                            'category^2',
-                            'description',
-                            'skus.title^2',
-                            'skus.description',
-                            'properties.value',
-                        ],
-                    ],
-                ];
-            }
+            $builder->keywords($keywords);
         }
 
         if ($search || isset($category)) {
-            $params['body']['aggs'] = [
-                'properties' => [
-                    'nested' => [
-                        'path' => 'properties',
-                    ],
-                    'aggs'  => [
-                        'properties' => [
-                            'terms' => [
-                                'field' => 'properties.name',
-                            ],
-                            'aggs' => [
-                                'value' => [
-                                    'terms' => [
-                                        'field' => 'properties.value',
-                                    ],
-                                ],
-                            ],
-                        ],
-
-                    ],
-                ],
-            ];
-        }
-
-        if ($order = $request->input('order','')) {
-            if (preg_match('/^(.+)_(asc|desc)$/', $order, $m)) {
-                if (in_array($m[1], ['price','sold_count','rating'])) {
-                    $params['body']['sort'] = [[$m[1]=> $m[2]]];
-                }
-            }
-        }
-
-        if ($request->input('category_id') && $category = Category::find($request->input('category_id'))) {
-            if ($category->is_directory) {
-                
-                $params['body']['query']['bool']['filter'][] = [
-                    'prefix' => ['category_path' => $category->path.$category->id.'-'],
-                ];
-            } else {
-                $params['body']['query']['bool']['filter'][] = ['term' => ['category_id' => $category->id]];
-            }
+           
+           $builder->aggregateProperties();
         }
 
         $propertyFilters = [];
         if ($filterString = $request->input('filters')) {
             $filterArray = explode('|', $filterString);
-            foreach ($filterArray as $filter) {
-                list($name,$value) = explode(':', $filter);
+            foreach ($filterArray as $filter ) {
+                list($name, $value) = explode(':', $filter);
                 $propertyFilters[$name] = $value;
-                $params['body']['query']['bool']['filter'][] = [
-                    'nested' => [
-                        'path' => 'properties',
-                        'query' => [
-                            ['term' => ['properties.search_value' => $filter]],
-                        ],
-                    ],
-                ];
+
+                $builder->propertyFilters($name, $value);
             }
         }
-        $result = app('es')->search($params);
+
+        if ($order = $request->input('order','')) {
+            if (preg_match('/^(.+)_(asc|desc)$/', $order, $m)) {
+                if (in_array($m[1], ['price','sold_count','rating'])) {
+                    $builder->orderBy($m[1], $m[2]);
+                }
+            }
+        }
+
+        
+        $result = app('es')->search($builder->getParams());
 
         $productIds = collect($result['hits']['hits'])->pluck('_id')->all();
         $products = Product::query()
